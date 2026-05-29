@@ -16,7 +16,9 @@ export default function LecturerQuizzes() {
           <h1>My Quizzes</h1>
           <p className="subtitle">Manage and create examination content</p>
         </div>
-        <button className="btn btn-primary">+ Create New Quiz</button>
+        <Link href="/dashboard/lecturer/quizzes/create" className="btn btn-primary">
+          + Create New Quiz
+        </Link>
       </header>
 
       <div className="quizzes-grid">
