@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProctoring } from '@/hooks/useProctoring';
 import { useToast } from '@/context/NotificationContext';
@@ -16,6 +16,9 @@ interface Quiz {
   title: string;
   duration: number;
   questions: Question[];
+  enableAlarm: boolean;
+  alarmDuration: number;
+  reminderText: string;
 }
 
 export default function ExamPage({ params }: { params: Promise<{ id: string }> }) {
@@ -95,6 +98,7 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   const handleSubmit = async () => {
     if (!studentInfo || !quiz || isFinished) return;
     setIsFinished(true);
+    stopAlarm();
     
     try {
       const res = await fetch('/api/submissions', {
@@ -118,6 +122,59 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
       showToast('Lỗi kết nối máy chủ', 'error');
     }
   };
+
+  // --- ANTI-CHEAT ALARM & TTS ---
+  const [alarmActive, setAlarmActive] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const triggerAlarm = useCallback(() => {
+    if (!quiz?.enableAlarm) return;
+    
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(e => console.error('Audio play failed:', e));
+      setAlarmActive(true);
+      
+      setTimeout(() => {
+        stopAlarm();
+      }, (quiz.alarmDuration || 10) * 1000);
+    }
+
+    if (quiz.reminderText && 'speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(quiz.reminderText);
+      utterance.lang = 'vi-VN';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [quiz]);
+
+  const stopAlarm = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setAlarmActive(false);
+  }, []);
+
+  const lastViolationCount = useRef(0);
+  useEffect(() => {
+    if (violations.length > lastViolationCount.current) {
+      triggerAlarm();
+      // Report violation to LIVE MONITORING API
+      if (studentInfo) {
+        fetch('/api/proctoring/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quizId: id,
+            studentInfo,
+            action: violations[violations.length - 1],
+          }),
+        }).catch(err => console.error('Live log failed:', err));
+      }
+      lastViolationCount.current = violations.length;
+    }
+  }, [violations, triggerAlarm, id, studentInfo]);
 
   if (loading) return <div className="loading-state">Đang tải bài thi...</div>;
   if (!quiz) return <div className="error-state">Không tìm thấy bài thi.</div>;
@@ -173,6 +230,18 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
         </div>
       )}
 
+      {/* Alarm Sound */}
+      <audio ref={audioRef} src="https://assets.mixkit.co/active_storage/sfx/995/995-preview.mp3" loop />
+      
+      {alarmActive && (
+        <div className="alarm-overlay animate-pulse">
+          <div className="alarm-content glass-card">
+            <h2>⚠️ CẢNH BÁO VI PHẠM!</h2>
+            <p>{quiz.reminderText}</p>
+          </div>
+        </div>
+      )}
+
       <header className="exam-header glass-card flex-between sticky">
         <div className="quiz-title">
           <h1>{quiz.title}</h1>
@@ -184,7 +253,10 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </span>
         </div>
-        <button className="btn btn-primary" onClick={handleSubmit}>Nộp bài</button>
+        <div className="flex gap-4">
+          <button className="btn btn-secondary" onClick={() => router.push('/')}>Thoát</button>
+          <button className="btn btn-primary" onClick={handleSubmit}>Nộp bài</button>
+        </div>
       </header>
 
       <div className="exam-content">
@@ -212,14 +284,15 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       <style jsx>{`
-        .exam-container { padding: 2rem; max-width: 1000px; margin: 0 auto; }
+        .exam-container { padding: 2rem; max-width: 1000px; margin: 0 auto; position: relative; }
         .sticky { position: sticky; top: 1rem; z-index: 100; margin-bottom: 2rem; }
         .exam-header { padding: 1.5rem 2rem; border: 1px solid var(--border); }
+        .gap-4 { gap: 1rem; }
         
         .timer-block { padding: 0.5rem 1.5rem; text-align: center; border: 1px solid var(--primary); }
         .timer-label { display: block; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); }
         .timer-value { font-size: 1.5rem; font-weight: 900; color: var(--primary); }
-        .timer-value.urgent { color: var(--error); animation: pulse 1s infinite; }
+        .timer-value.urgent { color: var(--error); }
 
         .questions-grid { display: flex; flex-direction: column; gap: 2rem; margin-top: 3rem; }
         .question-card { padding: 2.5rem; border: 1px solid rgba(255,255,255,0.05); }
@@ -235,21 +308,21 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
         .option-item:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--primary); }
         .option-item.selected { background: rgba(var(--primary-rgb), 0.1); border-color: var(--primary); }
         
-        .radio-custom {
-          width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%;
-          position: relative;
-        }
-        .option-item.selected .radio-custom { border-color: var(--primary); }
-        .option-item.selected .radio-custom::after {
-          content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-          width: 10px; height: 10px; background: var(--primary); border-radius: 50%;
-        }
         input[type="radio"] { display: none; }
+        .radio-custom { width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%; position: relative; }
+        .option-item.selected .radio-custom { border-color: var(--primary); }
+        .option-item.selected .radio-custom::after { content: ''; position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:10px; height:10px; background:var(--primary); border-radius:50%; }
 
-        .fullscreen-warning {
-          position: fixed; top: 0; left: 0; right: 0; background: var(--error); color: white;
-          text-align: center; padding: 0.75rem; font-weight: 700; z-index: 9999;
+        .fullscreen-warning { position: fixed; top: 0; left: 0; right: 0; background: var(--error); color: white; text-align: center; padding: 0.75rem; font-weight: 700; z-index: 10000; }
+
+        .alarm-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(239, 68, 68, 0.3); border: 10px solid var(--error);
+          display: flex; justify-content: center; align-items: center; z-index: 9999;
+          pointer-events: none;
         }
+        .alarm-content { padding: 3rem; text-align: center; border-color: var(--error); pointer-events: auto; }
+        .alarm-content h2 { font-size: 2.5rem; color: var(--error); margin-bottom: 1rem; }
 
         .identity-container { height: 100vh; display: flex; justify-content: center; align-items: center; }
         .identity-card { width: 100%; max-width: 450px; padding: 3rem; text-align: center; }

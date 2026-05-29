@@ -40,6 +40,13 @@ model Quiz {
   questions   Question[]
   submissions Submission[]
   allowedStudents WhitelistStudent[]
+  liveViolations  LiveViolation[]
+  
+  // Advanced Proctoring Settings
+  enableAlarm     Boolean         @default(true)
+  alarmDuration   Int             @default(10)      // In seconds
+  reminderText    String?         @default("Vui lòng tập trung làm bài, không được rời khỏi tab thi!")
+
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -88,6 +95,18 @@ model Submission {
   endTime   DateTime?
   logs      AuditLog[]
   status    String   @default("IN_PROGRESS") // "IN_PROGRESS", "SUBMITTED", "GRADED"
+}
+
+model LiveViolation {
+  id          String   @id @default(cuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  studentName String
+  mssv        String
+  class       String
+  action      String
+  details     String?
+  timestamp   DateTime @default(now())
 }
 
 model Answer {

@@ -48,7 +48,10 @@ export async function POST(req: Request) {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     const lecturerId = decoded.userId;
 
-    const { title, description, duration, questions, whitelist } = await req.json();
+    const { 
+      title, description, duration, questions, whitelist,
+      enableAlarm, alarmDuration, reminderText 
+    } = await req.json();
 
     if (!title || !questions || questions.length === 0) {
       return NextResponse.json({ error: 'Title and at least one question are required' }, { status: 400 });
@@ -61,6 +64,9 @@ export async function POST(req: Request) {
           description,
           duration: Number(duration),
           lecturerId,
+          enableAlarm: Boolean(enableAlarm),
+          alarmDuration: Number(alarmDuration || 10),
+          reminderText: reminderText || undefined,
           questions: {
             create: questions.map((q: any) => ({
               text: q.text,

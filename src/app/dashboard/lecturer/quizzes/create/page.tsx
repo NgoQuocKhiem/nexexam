@@ -26,6 +26,9 @@ export default function CreateQuizPage() {
   const [whitelistText, setWhitelistText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [enableAlarm, setEnableAlarm] = useState(true);
+  const [alarmDuration, setAlarmDuration] = useState(10);
+  const [reminderText, setReminderText] = useState('Vui lòng tập trung làm bài, không được rời khỏi tab thi!');
   const router = useRouter();
 
   const { showToast } = useToast();
@@ -119,7 +122,10 @@ export default function CreateQuizPage() {
       const res = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, duration, questions, whitelist }),
+        body: JSON.stringify({ 
+          title, description, duration, questions, whitelist,
+          enableAlarm, alarmDuration, reminderText
+        }),
       });
 
       if (res.ok) {
@@ -199,6 +205,44 @@ export default function CreateQuizPage() {
               onChange={(e) => setWhitelistText(e.target.value)}
               placeholder="Nguyễn Văn A | 200123 | IT-01"
             />
+          </section>
+
+          <section className="glass-card settings-section">
+            <h3>Cài đặt Giám sát & Chống gian lận</h3>
+            <div className="form-group flex-between">
+              <label>Kích hoạt chuông cảnh báo</label>
+              <input 
+                type="checkbox" 
+                className="toggle-switch"
+                checked={enableAlarm}
+                onChange={(e) => setEnableAlarm(e.target.checked)}
+              />
+            </div>
+            
+            {enableAlarm && (
+              <>
+                <div className="form-group">
+                  <label>Thời lượng chuông (Giây)</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    max="600"
+                    value={alarmDuration}
+                    onChange={(e) => setAlarmDuration(Number(e.target.value))}
+                  />
+                  <p className="help-text-small">Chuông sẽ kêu liên tục khi sinh viên rời khỏi bài thi.</p>
+                </div>
+                <div className="form-group">
+                  <label>Lời nhắc nhở bằng giọng nói (AI Voice)</label>
+                  <textarea 
+                    placeholder="Ví dụ: Vui lòng quay lại ngay, giám thị đã ghi nhận vi phạm!"
+                    value={reminderText}
+                    onChange={(e) => setReminderText(e.target.value)}
+                  />
+                  <p className="help-text-small">Hệ thống sẽ tự động đọc lời nhắc này khi vi phạm xảy ra.</p>
+                </div>
+              </>
+            )}
           </section>
         </div>
 

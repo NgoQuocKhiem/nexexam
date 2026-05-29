@@ -28,6 +28,9 @@ export async function GET(
             },
           },
         },
+        enableAlarm: true,
+        alarmDuration: true,
+        reminderText: true,
       },
     });
 
@@ -115,6 +118,7 @@ export async function DELETE(
       prisma.auditLog.deleteMany({ where: { submission: { quizId: id } } }),
       prisma.submission.deleteMany({ where: { quizId: id } }),
       prisma.whitelistStudent.deleteMany({ where: { quizId: id } }),
+      prisma.liveViolation.deleteMany({ where: { quizId: id } }),
       prisma.option.deleteMany({ where: { question: { quizId: id } } }),
       prisma.question.deleteMany({ where: { quizId: id } }),
       prisma.quiz.delete({ where: { id } }),
