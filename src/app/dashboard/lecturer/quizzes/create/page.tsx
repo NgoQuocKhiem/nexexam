@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { useToast } from '@/context/NotificationContext';
 
 interface Option {
   text: string;
@@ -27,6 +28,8 @@ export default function CreateQuizPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const { showToast } = useToast();
+
   // EXCEL PARSING: Students
   const handleStudentExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,15 +43,14 @@ export default function CreateQuizPage() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-      // Assuming columns: Name | MSSV | Class
       const formatted = data
-        .slice(1) // Skip header
+        .slice(1)
         .filter(row => row.length >= 2)
         .map(row => `${row[0] || ''} | ${row[1] || ''} | ${row[2] || ''}`)
         .join('\n');
 
       setWhitelistText(prev => prev ? prev + '\n' + formatted : formatted);
-      alert(`Đã nhập thành công ${data.length - 1} sinh viên từ Excel.`);
+      showToast(`Đã nhập thành công ${data.length - 1} sinh viên từ Excel.`, 'success');
     };
     reader.readAsBinaryString(file);
   };
@@ -66,7 +68,6 @@ export default function CreateQuizPage() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-      // Assuming columns: Question | Opt1 | Opt2 | Opt3 | Opt4 | CorrectIndex (1-4)
       const newQuestions: Question[] = data
         .slice(1)
         .filter(row => row.length >= 3)
@@ -82,7 +83,7 @@ export default function CreateQuizPage() {
         }));
 
       setQuestions(prev => [...prev, ...newQuestions]);
-      alert(`Đã nhập thành công ${newQuestions.length} câu hỏi từ Excel.`);
+      showToast(`Đã nhập thành công ${newQuestions.length} câu hỏi từ Excel.`, 'success');
     };
     reader.readAsBinaryString(file);
   };
@@ -101,7 +102,7 @@ export default function CreateQuizPage() {
 
   const handleSave = async () => {
     if (!title || questions.length === 0) {
-      alert('Vui lòng nhập tên bài thi và ít nhất 1 câu hỏi.');
+      showToast('Vui lòng nhập tên bài thi và ít nhất 1 câu hỏi.', 'warning');
       return;
     }
 
@@ -122,14 +123,14 @@ export default function CreateQuizPage() {
       });
 
       if (res.ok) {
-        alert('Tạo bài kiểm tra thành công!');
+        showToast('Tạo bài kiểm tra thành công!', 'success');
         router.push('/dashboard/lecturer/quizzes');
       } else {
         const error = await res.json();
-        alert('Lỗi: ' + error.error);
+        showToast('Lỗi: ' + error.error, 'error');
       }
     } catch (error) {
-      alert('Đã xảy ra lỗi khi lưu bài thi.');
+      showToast('Đã xảy ra lỗi khi lưu bài thi.', 'error');
     } finally {
       setLoading(false);
     }

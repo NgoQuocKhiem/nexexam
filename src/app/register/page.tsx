@@ -1,24 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useToast } from '@/context/NotificationContext';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'STUDENT',
+    role: 'STUDENT'
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const router = useRouter();
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch('/api/auth/register', {
@@ -29,187 +29,113 @@ export default function RegisterPage() {
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong');
+      if (res.ok) {
+        showToast('Đăng ký thành công! Đang chuyển hướng...', 'success');
+        setTimeout(() => {
+          if (data.user.role === 'LECTURER') {
+            router.push('/dashboard/lecturer/quizzes');
+          } else {
+            router.push('/dashboard/student');
+          }
+        }, 1500);
+      } else {
+        showToast(data.error || 'Đăng ký thất bại', 'error');
       }
-
-      router.push('/login');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      showToast('Lỗi kết nối máy chủ', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container animate-fade-in">
-      <div className="glass-card auth-card">
-        <h1>Join <span className="text-gradient">QuestGuard</span></h1>
-        <p className="subtitle">Create your account to start</p>
-
-        {error && <div className="error-message">{error}</div>}
+    <div className="register-container glass-container animate-fade-in">
+      <div className="register-card glass-card">
+        <h1>Hãy gia nhập QuestGuard</h1>
+        <p className="subtitle">Tạo tài khoản của bạn để bắt đầu</p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Name</label>
-            <input
-              type="text"
-              placeholder="Your full name"
+            <label>Tên</label>
+            <input 
+              type="text" 
+              placeholder="Nguyễn Văn A" 
+              required
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
             />
           </div>
           <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              placeholder="example@univ.edu"
+            <label>E-mail</label>
+            <input 
+              type="email" 
+              placeholder="ten@vidu.com" 
+              required
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
             />
           </div>
           <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
+            <label>Mật khẩu</label>
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              required
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              required
+              onChange={(e) => setFormData({...formData, password: e.target.value})}
             />
           </div>
           <div className="form-group">
-            <label>I am a...</label>
-            <div className="radio-group">
-              <label className={`radio-label ${formData.role === 'STUDENT' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  name="role"
-                  value="STUDENT"
-                  checked={formData.role === 'STUDENT'}
-                  onChange={() => setFormData({ ...formData, role: 'STUDENT' })}
-                />
-                Student
-              </label>
-              <label className={`radio-label ${formData.role === 'LECTURER' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  name="role"
-                  value="LECTURER"
-                  checked={formData.role === 'LECTURER'}
-                  onChange={() => setFormData({ ...formData, role: 'LECTURER' })}
-                />
-                Lecturer
-              </label>
-            </div>
+            <label>Tôi là...</label>
+            <select 
+              className="select-input"
+              value={formData.role}
+              onChange={(e) => setFormData({...formData, role: e.target.value})}
+            >
+              <option value="STUDENT">Học sinh</option>
+              <option value="LECTURER">Giảng viên</option>
+            </select>
           </div>
 
-          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-            {loading ? 'Creating Account...' : 'Register'}
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+            {loading ? 'Đang tạo...' : 'Đăng ký'}
           </button>
         </form>
 
         <p className="footer-text">
-          Already have an account? <Link href="/login">Login</Link>
+          Bạn đã có tài khoản? <Link href="/login">Đăng nhập</Link>
         </p>
       </div>
 
       <style jsx>{`
-        .auth-container {
+        .register-container {
+          min-height: 100vh;
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 100vh;
           padding: 2rem;
         }
-        .auth-card {
+        .register-card {
           width: 100%;
           max-width: 450px;
-          text-align: center;
+          padding: 3rem;
         }
-        h1 {
-          font-size: 2.5rem;
-          margin-bottom: 0.5rem;
-        }
-        .text-gradient {
-          background: linear-gradient(135deg, var(--primary), var(--secondary));
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .subtitle {
-          color: var(--text-muted);
-          margin-bottom: 2rem;
-        }
-        .form-group {
-          text-align: left;
-          margin-bottom: 1.5rem;
-        }
-        label {
-          display: block;
-          margin-bottom: 0.5rem;
-          font-weight: 500;
-          color: var(--text-muted);
-        }
-        input[type="text"],
-        input[type="email"],
-        input[type="password"] {
+        h1 { margin-bottom: 0.5rem; text-align: center; font-size: 1.8rem; }
+        .subtitle { text-align: center; margin-bottom: 2.5rem; color: var(--text-muted); }
+        .form-group { margin-bottom: 1.25rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted); }
+        input, .select-input {
           width: 100%;
-          padding: 0.75rem 1rem;
-          background: var(--surface);
+          padding: 0.8rem;
+          background: rgba(255, 255, 255, 0.05);
           border: 1px solid var(--border);
-          border-radius: var(--radius-md);
+          border-radius: 8px;
           color: var(--text);
-          outline: none;
-          transition: var(--transition);
         }
-        input:focus {
-          border-color: var(--primary);
-          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-        }
-        .radio-group {
-          display: flex;
-          gap: 1rem;
-        }
-        .radio-label {
-          flex: 1;
-          padding: 0.75rem;
-          border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          transition: var(--transition);
-          text-align: center;
-          position: relative;
-        }
-        .radio-label input {
-          position: absolute;
-          opacity: 0;
-        }
-        .radio-label.active {
-          border-color: var(--primary);
-          background: rgba(99, 102, 241, 0.1);
-          color: var(--primary);
-        }
-        .error-message {
-          background: rgba(239, 68, 68, 0.1);
-          color: var(--error);
-          padding: 0.75rem;
-          border-radius: var(--radius-md);
-          margin-bottom: 1.5rem;
-        }
-        .w-full {
-          width: 100%;
-        }
-        .footer-text {
-          margin-top: 1.5rem;
-          color: var(--text-muted);
-        }
-        .footer-text a {
-          color: var(--primary);
-          text-decoration: none;
-          font-weight: 600;
-        }
+        .select-input option { background: #111; }
+        .btn-full { width: 100%; margin-top: 1rem; padding: 1rem; }
+        .footer-text { text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--text-muted); }
+        .footer-text a { color: var(--primary); font-weight: 600; text-decoration: none; }
       `}</style>
     </div>
   );

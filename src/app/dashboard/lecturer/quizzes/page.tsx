@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useToast } from '@/context/NotificationContext';
 
 interface Quiz {
   id: string;
@@ -17,6 +18,7 @@ interface Quiz {
 export default function LecturerQuizzes() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
+  const { showToast, confirm } = useToast();
 
   const fetchQuizzes = async () => {
     try {
@@ -26,7 +28,7 @@ export default function LecturerQuizzes() {
         setQuizzes(data.quizzes || []);
       }
     } catch (error) {
-      console.error('Fetch quizzes error:', error);
+      showToast('Không thể tải danh sách bài thi', 'error');
     } finally {
       setLoading(false);
     }
@@ -37,21 +39,19 @@ export default function LecturerQuizzes() {
   }, []);
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa bài thi "${title}"? Thao tác này sẽ xóa toàn bộ câu hỏi và kết quả thi của sinh viên.`)) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/quizzes/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        alert('Xóa bài thi thành công');
-        fetchQuizzes();
-      } else {
-        alert('Lỗi khi xóa bài thi');
+    confirm(`Bạn có chắc chắn muốn xóa bài thi "${title}"? Thao tác này sẽ xóa toàn bộ câu hỏi và kết quả thi của sinh viên.`, async () => {
+      try {
+        const res = await fetch(`/api/quizzes/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Đã xóa bài thi thành công', 'success');
+          fetchQuizzes();
+        } else {
+          showToast('Lỗi khi xóa bài thi', 'error');
+        }
+      } catch (error) {
+        showToast('Lỗi kết nối máy chủ', 'error');
       }
-    } catch (error) {
-      alert('Lỗi kết nối');
-    }
+    });
   };
 
   const downloadQR = async (url: string, title: string) => {
@@ -66,6 +66,7 @@ export default function LecturerQuizzes() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
+      showToast('Đang tải mã QR...', 'success');
     } catch (error) {
       window.open(url, '_blank');
     }
@@ -113,7 +114,7 @@ export default function LecturerQuizzes() {
                     <div className="share-actions">
                       <button className="share-link-btn" onClick={() => {
                         navigator.clipboard.writeText(examUrl);
-                        alert('Đã copy link bài thi!');
+                        showToast('Đã copy link bài thi!', 'success');
                       }}>🔗 Copy Link</button>
                       <button className="share-qr-btn" onClick={() => downloadQR(qrUrl, quiz.title)}>💾 Tải mã QR</button>
                     </div>

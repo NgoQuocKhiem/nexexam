@@ -3,153 +3,110 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/context/NotificationContext';
 
 export default function LoginPage() {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const router = useRouter();
+  const { showToast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong');
-      }
-
-      // Redirect based on role
-      if (data.user.role === 'LECTURER') {
-        router.push('/dashboard/lecturer');
+      if (res.ok) {
+        showToast('Đăng nhập thành công!', 'success');
+        if (data.user.role === 'LECTURER') {
+          router.push('/dashboard/lecturer/quizzes');
+        } else {
+          router.push('/dashboard/student');
+        }
       } else {
-        router.push('/dashboard/student');
+        showToast(data.error || 'Đăng nhập thất bại', 'error');
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      showToast('Lỗi kết nối máy chủ', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container animate-fade-in">
-      <div className="glass-card auth-card">
-        <h1>Welcome Back</h1>
-        <p className="subtitle">Sign in to your <span className="text-secondary">QuestGuard</span> account</p>
+    <div className="login-container glass-container animate-fade-in">
+      <div className="login-card glass-card">
+        <h1>Chào mừng trở lại</h1>
+        <p className="subtitle">Đăng nhập vào tài khoản QuestGuard của bạn</p>
 
-        {error && <div className="error-message">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              placeholder="example@univ.edu"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
+            <label>E-mail</label>
+            <input 
+              type="email" 
+              placeholder="ten@vidu.com" 
+              required 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              required
+            <label>Mật khẩu</label>
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              required 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
-          <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-            {loading ? 'Signing in...' : 'Login'}
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+            {loading ? 'Đang xác thực...' : 'Đăng nhập'}
           </button>
         </form>
 
         <p className="footer-text">
-          Don't have an account? <Link href="/register">Register</Link>
+          Bạn chưa có tài khoản? <Link href="/register">Đăng ký ngay</Link>
         </p>
       </div>
 
       <style jsx>{`
-        .auth-container {
+        .login-container {
+          height: 100vh;
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 100vh;
-          padding: 2rem;
         }
-        .auth-card {
+        .login-card {
           width: 100%;
-          max-width: 400px;
-          text-align: center;
+          max-width: 450px;
+          padding: 3rem;
         }
-        h1 {
-          font-size: 2.2rem;
-          margin-bottom: 0.5rem;
-        }
-        .text-secondary {
-          color: var(--secondary);
-        }
-        .subtitle {
-          color: var(--text-muted);
-          margin-bottom: 2rem;
-        }
-        .form-group {
-          text-align: left;
-          margin-bottom: 1.5rem;
-        }
-        label {
-          display: block;
-          margin-bottom: 0.5rem;
-          font-weight: 500;
-          color: var(--text-muted);
-        }
+        h1 { margin-bottom: 0.5rem; text-align: center; }
+        .subtitle { text-align: center; margin-bottom: 2.5rem; color: var(--text-muted); }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted); }
         input {
           width: 100%;
-          padding: 0.75rem 1rem;
-          background: var(--surface);
+          padding: 0.9rem;
+          background: rgba(255, 255, 255, 0.05);
           border: 1px solid var(--border);
-          border-radius: var(--radius-md);
+          border-radius: 8px;
           color: var(--text);
-          outline: none;
-          transition: var(--transition);
         }
-        input:focus {
-          border-color: var(--primary);
-        }
-        .error-message {
-          background: rgba(239, 68, 68, 0.1);
-          color: var(--error);
-          padding: 0.75rem;
-          border-radius: var(--radius-md);
-          margin-bottom: 1.5rem;
-        }
-        .w-full {
-          width: 100%;
-        }
-        .footer-text {
-          margin-top: 1.5rem;
-          color: var(--text-muted);
-        }
-        .footer-text a {
-          color: var(--primary);
-          text-decoration: none;
-          font-weight: 600;
-        }
+        .btn-full { width: 100%; margin-top: 1rem; padding: 1rem; }
+        .footer-text { text-align: center; margin-top: 2rem; font-size: 0.9rem; color: var(--text-muted); }
+        .footer-text a { color: var(--primary); font-weight: 600; text-decoration: none; }
       `}</style>
     </div>
   );

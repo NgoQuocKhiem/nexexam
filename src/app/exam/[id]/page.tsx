@@ -1,37 +1,42 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useProctoring } from '@/hooks/useProctoring';
 import { useRouter } from 'next/navigation';
+import { useProctoring } from '@/hooks/useProctoring';
+import { useToast } from '@/context/NotificationContext';
 
 interface Question {
   id: string;
   text: string;
-  type: 'MULTIPLE_CHOICE' | 'ESSAY';
-  options?: { id: string; text: string }[];
+  options: { id: string; text: string }[];
 }
 
-interface StudentInfo {
-  name: string;
-  mssv: string;
-  class: string;
+interface Quiz {
+  id: string;
+  title: string;
+  duration: number;
+  questions: Question[];
 }
 
 export default function ExamPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const id = resolvedParams.id;
-  
-  const [loading, setLoading] = useState(true);
-  const [quiz, setQuiz] = useState<any>(null);
-  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-  const [entryForm, setEntryForm] = useState({ name: '', mssv: '', className: '' });
-  const [examStarted, setExamStarted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [violations, setViolations] = useState<string[]>([]);
+  const { id } = use(params);
   const router = useRouter();
+  const { showToast } = useToast();
+  
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isVerified, setIsVerified] = useState(false);
+  const [studentInfo, setStudentInfo] = useState<{ name: string; mssv: string; class: string } | null>(null);
+  const [tempInfo, setTempInfo] = useState({ name: '', mssv: '', class: '' });
+  const [checkingWhitelist, setCheckingWhitelist] = useState(false);
 
-  // 1. Fetch Quiz Data
+  // States for the exam
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+
+  const { violations, isFullscreen } = useProctoring(isVerified && !isFinished);
+
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
@@ -40,70 +45,56 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
           const data = await res.json();
           setQuiz(data.quiz);
           setTimeLeft(data.quiz.duration * 60);
-        } else {
-          alert('Không tìm thấy bài thi.');
-          router.push('/');
         }
       } catch (error) {
-        console.error('Fetch quiz error:', error);
+        showToast('Lỗi tải bài thi', 'error');
       } finally {
         setLoading(false);
       }
     };
     fetchQuiz();
-  }, [id, router]);
+  }, [id, showToast]);
 
-  // 2. Timer Logic
   useEffect(() => {
-    if (examStarted && timeLeft > 0) {
-      const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    if (isVerified && timeLeft > 0 && !isFinished) {
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
       return () => clearInterval(timer);
-    } else if (timeLeft === 0 && examStarted) {
+    } else if (timeLeft === 0 && isVerified) {
       handleSubmit();
     }
-  }, [examStarted, timeLeft]);
+  }, [isVerified, timeLeft, isFinished]);
 
-  const handleViolation = (action: string, details?: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setViolations((prev) => [...prev, `[${timestamp}] ${action}: ${details}`]);
-  };
-
-  const { enterFullscreen } = useProctoring({
-    enabled: examStarted,
-    onViolation: handleViolation,
-  });
-
-  const handleVerify = async (e: React.FormEvent) => {
+  const handleIdentitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCheckingWhitelist(true);
     try {
       const res = await fetch(`/api/quizzes/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: entryForm.name, 
-          mssv: entryForm.mssv, 
-          class: entryForm.className 
-        }),
+        body: JSON.stringify(tempInfo),
       });
 
-      const data = await res.json();
       if (res.ok) {
+        const data = await res.json();
         setStudentInfo(data.student);
+        setIsVerified(true);
+        showToast('Xác thực thành công! Hãy tập trung làm bài.', 'success');
       } else {
-        alert(data.error || 'Thông tin không hợp lệ');
+        const error = await res.json();
+        showToast(error.error || 'Thông tin không hợp lệ', 'error');
       }
     } catch (error) {
-      alert('Lỗi kết nối máy chủ');
+      showToast('Lỗi kết nối máy chủ', 'error');
+    } finally {
+      setCheckingWhitelist(false);
     }
   };
 
-  const startExam = () => {
-    setExamStarted(true);
-    enterFullscreen();
-  };
-
   const handleSubmit = async () => {
-    if (!studentInfo || !quiz) return;
+    if (!studentInfo || !quiz || isFinished) return;
+    setIsFinished(true);
     
     try {
       const res = await fetch('/api/submissions', {
@@ -111,195 +102,159 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           quizId: id,
-          studentInfo: {
-            name: studentInfo.name,
-            mssv: studentInfo.mssv,
-            class: studentInfo.class,
-          },
+          studentInfo,
           answers,
           violations,
         }),
       });
 
       if (res.ok) {
-        alert('Chúc mừng! Bài thi của bạn đã được nộp thành công.');
+        showToast('Chúc mừng! Bài thi của bạn đã được nộp thành công.', 'success');
         router.push('/');
       } else {
-        alert('Lỗi nộp bài. Vui lòng thử lại hoặc báo cho Giảng viên.');
+        showToast('Lỗi nộp bài. Vui lòng liên hệ Giảng viên.', 'error');
       }
     } catch (error) {
-      alert('Lỗi kết nối máy chủ');
+      showToast('Lỗi kết nối máy chủ', 'error');
     }
   };
 
   if (loading) return <div className="loading-state">Đang tải bài thi...</div>;
-  if (!quiz) return <div className="loading-state">Lỗi: Không tìm thấy bài thi.</div>;
+  if (!quiz) return <div className="error-state">Không tìm thấy bài thi.</div>;
 
-  // STEP 1: Identification Form
-  if (!studentInfo) {
+  if (!isVerified) {
     return (
-      <div className="exam-entry-container">
-        <div className="glass-card entry-card animate-fade-in">
-          <h2>Xác Nhận Thông Tin Dự Thi</h2>
-          <p className="subtitle">{quiz.title}</p>
-          <form onSubmit={handleVerify} className="entry-form">
+      <div className="identity-container glass-container animate-fade-in">
+        <div className="identity-card glass-card">
+          <h2>Xác nhận danh tính</h2>
+          <p className="subtitle">Vui lòng nhập thông tin chính xác để bắt đầu bài thi.</p>
+          <form onSubmit={handleIdentitySubmit}>
             <div className="form-group">
               <label>Họ và Tên</label>
-              <input type="text" value={entryForm.name} onChange={(e) => setEntryForm({...entryForm, name: e.target.value})} required placeholder="Ví dụ: Nguyễn Văn A" />
+              <input 
+                type="text" 
+                required 
+                value={tempInfo.name}
+                onChange={(e) => setTempInfo({...tempInfo, name: e.target.value})}
+              />
             </div>
             <div className="form-group">
               <label>Mã số sinh viên (MSSV)</label>
-              <input type="text" value={entryForm.mssv} onChange={(e) => setEntryForm({...entryForm, mssv: e.target.value})} required placeholder="Ví dụ: 200123" />
+              <input 
+                type="text" 
+                required 
+                value={tempInfo.mssv}
+                onChange={(e) => setTempInfo({...tempInfo, mssv: e.target.value})}
+              />
             </div>
             <div className="form-group">
               <label>Lớp</label>
-              <input type="text" value={entryForm.className} onChange={(e) => setEntryForm({...entryForm, className: e.target.value})} required placeholder="Ví dụ: IT-01" />
+              <input 
+                type="text" 
+                required 
+                value={tempInfo.class}
+                onChange={(e) => setTempInfo({...tempInfo, class: e.target.value})}
+              />
             </div>
-            <button type="submit" className="btn btn-primary w-full">Vào Phòng Thi</button>
+            <button type="submit" className="btn btn-primary btn-full" disabled={checkingWhitelist}>
+              {checkingWhitelist ? 'Đang kiểm tra...' : 'Bắt đầu bài thi'}
+            </button>
           </form>
         </div>
-        <style jsx>{`
-          .exam-entry-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 2rem; }
-          .entry-card { max-width: 450px; width: 100%; text-align: center; }
-          h2 { font-size: 1.75rem; margin-bottom: 0.5rem; }
-          .subtitle { color: var(--text-muted); margin-bottom: 2rem; }
-          .entry-form { display: flex; flex-direction: column; gap: 1.5rem; }
-          .form-group { text-align: left; }
-          label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted); }
-          input { width: 100%; padding: 0.85rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
-          .w-full { width: 100%; }
-        `}</style>
       </div>
     );
   }
 
-  // STEP 2: Pre-start Review
-  if (!examStarted) {
-    return (
-      <div className="exam-start-container">
-        <div className="glass-card start-card animate-fade-in">
-          <p className="student-badge">Sinh viên: {studentInfo.name} - {studentInfo.mssv}</p>
-          <h2>{quiz.title}</h2>
-          <div className="exam-info">
-            <p><strong>Thời gian:</strong> {quiz.duration} Phút</p>
-            <p><strong>Số câu hỏi:</strong> {quiz.questions.length}</p>
-          </div>
-          <div className="warning-box">
-            <p><strong>Lưu ý:</strong> Bài thi có giám sát. Việc thoát toàn màn hình hoặc chuyển tab sẽ bị ghi lại vào nhật ký gian lận.</p>
-          </div>
-          <button onClick={startExam} className="btn btn-primary btn-large w-full">
-            Bắt Đầu Làm Bài
-          </button>
-        </div>
-        <style jsx>{`
-          .exam-start-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 2rem; }
-          .start-card { max-width: 600px; text-align: center; padding: 3rem; }
-          .student-badge { background: rgba(99, 102, 241, 0.1); color: var(--primary); padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600; display: inline-block; margin-bottom: 1.5rem; }
-          h2 { font-size: 2.5rem; margin-bottom: 2rem; }
-          .exam-info { margin-bottom: 2rem; font-size: 1.1rem; display: flex; justify-content: center; gap: 3rem; }
-          .warning-box { background: rgba(245, 158, 11, 0.1); color: var(--warning); padding: 1.5rem; border-radius: 12px; margin-bottom: 2.5rem; border: 1px solid rgba(245, 158, 11, 0.2); }
-          .btn-large { padding: 1.25rem; font-size: 1.2rem; }
-          .w-full { width: 100%; }
-        `}</style>
-      </div>
-    );
-  }
-
-  // STEP 3: Active Exam
   return (
-    <div className="exam-active-container">
-      <header className="exam-header glass-card">
-        <div className="student-tag">{studentInfo.name} ({studentInfo.mssv})</div>
-        <div className="exam-title">{quiz.title}</div>
-        <div className="exam-timer">
-          {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+    <div className="exam-container animate-fade-in">
+      {!isFullscreen && (
+        <div className="fullscreen-warning">
+          ⚠️ Bạn phải ở chế độ toàn màn hình! [Nhấn F11 hoặc click vào đây]
         </div>
+      )}
+
+      <header className="exam-header glass-card flex-between sticky">
+        <div className="quiz-title">
+          <h1>{quiz.title}</h1>
+          <p className="student-name">Sinh viên: {studentInfo?.name}</p>
+        </div>
+        <div className="timer-block glass-card">
+          <span className="timer-label">Thời gian còn lại</span>
+          <span className={`timer-value ${timeLeft < 300 ? 'urgent' : ''}`}>
+            {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+          </span>
+        </div>
+        <button className="btn btn-primary" onClick={handleSubmit}>Nộp bài</button>
       </header>
 
-      <main className="exam-content">
-        <div className="violations-panel glass-card">
-          <h4>Nhật ký Giám sát</h4>
-          <div className="violations-list">
-            {violations.length === 0 ? (
-              <p className="no-violations">Hệ thống đang bảo vệ bài thi...</p>
-            ) : (
-              violations.map((v, i) => <div key={i} className="violation-item">{v}</div>)
-            )}
-          </div>
-        </div>
-
-        <div className="questions-panel">
-          {quiz.questions.map((q: any, idx: number) => (
-            <div key={q.id} className="glass-card question-card">
-              <div className="question-header">
-                <span className="question-number">Câu {idx + 1}</span>
+      <div className="exam-content">
+        <div className="questions-grid">
+          {quiz.questions.map((q, idx) => (
+            <div key={q.id} className="question-card glass-card">
+              <p className="question-text"><span>Câu {idx + 1}:</span> {q.text}</p>
+              <div className="options-list">
+                {q.options.map((opt) => (
+                  <label key={opt.id} className={`option-item ${answers[q.id] === opt.id ? 'selected' : ''}`}>
+                    <input 
+                      type="radio" 
+                      name={q.id} 
+                      value={opt.id} 
+                      onChange={() => setAnswers({...answers, [q.id]: opt.id})}
+                    />
+                    <span className="radio-custom"></span>
+                    <span className="opt-text">{opt.text}</span>
+                  </label>
+                ))}
               </div>
-              <p className="question-text">{q.text}</p>
-              
-              {q.type === 'MULTIPLE_CHOICE' ? (
-                <div className="options-list">
-                  {q.options?.map((opt: any) => (
-                    <label key={opt.id} className={`option-item ${answers[q.id] === opt.id ? 'selected' : ''}`}>
-                      <input
-                        type="radio"
-                        name={q.id}
-                        value={opt.id}
-                        onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                      />
-                      {opt.text}
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <textarea
-                  className="essay-input"
-                  placeholder="Nhập câu trả lời của bạn tại đây..."
-                  value={answers[q.id] || ''}
-                  onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                />
-              )}
             </div>
           ))}
         </div>
-      </main>
-
-      <footer className="exam-footer">
-        <button onClick={handleSubmit} className="btn btn-primary btn-large">Nộp Bài & Kết Thúc</button>
-      </footer>
+      </div>
 
       <style jsx>{`
-        .exam-active-container { padding: 2rem; max-width: 1400px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto; gap: 2rem; min-height: 100vh; }
-        .exam-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2.5rem; }
-        .student-tag { font-weight: 600; color: var(--text-muted); }
-        .exam-title { font-weight: 800; font-size: 1.25rem; color: var(--primary); }
-        .exam-timer { color: #f87171; font-family: monospace; font-size: 1.75rem; font-weight: 800; background: rgba(248, 113, 113, 0.1); padding: 0.5rem 1rem; border-radius: 8px; }
+        .exam-container { padding: 2rem; max-width: 1000px; margin: 0 auto; }
+        .sticky { position: sticky; top: 1rem; z-index: 100; margin-bottom: 2rem; }
+        .exam-header { padding: 1.5rem 2rem; border: 1px solid var(--border); }
         
-        .exam-content { display: grid; grid-template-columns: 320px 1fr; gap: 2rem; }
-        .violations-panel { position: sticky; top: 2rem; height: fit-content; padding: 1.5rem; }
-        .violations-list { margin-top: 1.5rem; font-size: 0.85rem; }
-        .violation-item { color: var(--error); margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(239, 68, 68, 0.05); border-radius: 4px; }
-        .no-violations { color: var(--success); font-style: italic; }
-        
-        .question-card { padding: 2.5rem; margin-bottom: 2rem; }
-        .question-header { margin-bottom: 1.5rem; }
-        .question-number { background: var(--primary); color: white; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 700; }
-        .question-text { font-size: 1.25rem; margin-bottom: 2rem; font-weight: 600; line-height: 1.5; }
-        
-        .options-list { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-        .option-item { padding: 1.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: var(--transition); display: flex; align-items: center; }
-        .option-item:hover { border-color: var(--primary); }
-        .option-item.selected { border-width: 2px; border-color: var(--primary); background: rgba(99, 102, 241, 0.05); }
-        .option-item input { margin-right: 1.5rem; transform: scale(1.2); }
-        
-        .essay-input { width: 100%; min-height: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; color: var(--text); padding: 1.5rem; resize: vertical; line-height: 1.6; }
-        
-        .exam-footer { display: flex; justify-content: flex-end; padding: 3rem 0; border-top: 1px solid var(--border); }
-        .btn-large { padding: 1rem 3rem; font-size: 1.1rem; }
-        
-        @media (max-width: 1024px) {
-          .exam-content { grid-template-columns: 1fr; }
-          .violations-panel { order: -1; position: static; }
+        .timer-block { padding: 0.5rem 1.5rem; text-align: center; border: 1px solid var(--primary); }
+        .timer-label { display: block; font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); }
+        .timer-value { font-size: 1.5rem; font-weight: 900; color: var(--primary); }
+        .timer-value.urgent { color: var(--error); animation: pulse 1s infinite; }
+
+        .questions-grid { display: flex; flex-direction: column; gap: 2rem; margin-top: 3rem; }
+        .question-card { padding: 2.5rem; border: 1px solid rgba(255,255,255,0.05); }
+        .question-text { font-size: 1.25rem; font-weight: 600; margin-bottom: 2rem; }
+        .question-text span { color: var(--primary); margin-right: 0.5rem; }
+
+        .options-list { display: flex; flex-direction: column; gap: 1rem; }
+        .option-item {
+          display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem;
+          background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 12px;
+          cursor: pointer; transition: 0.2s;
         }
+        .option-item:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--primary); }
+        .option-item.selected { background: rgba(var(--primary-rgb), 0.1); border-color: var(--primary); }
+        
+        .radio-custom {
+          width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%;
+          position: relative;
+        }
+        .option-item.selected .radio-custom { border-color: var(--primary); }
+        .option-item.selected .radio-custom::after {
+          content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+          width: 10px; height: 10px; background: var(--primary); border-radius: 50%;
+        }
+        input[type="radio"] { display: none; }
+
+        .fullscreen-warning {
+          position: fixed; top: 0; left: 0; right: 0; background: var(--error); color: white;
+          text-align: center; padding: 0.75rem; font-weight: 700; z-index: 9999;
+        }
+
+        .identity-container { height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .identity-card { width: 100%; max-width: 450px; padding: 3rem; text-align: center; }
+        .form-group { text-align: left; margin-bottom: 1.5rem; }
+        .btn-full { width: 100%; margin-top: 2rem; }
       `}</style>
     </div>
   );
