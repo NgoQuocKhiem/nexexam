@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useProctoring } from '@/hooks/useProctoring';
 import { useRouter } from 'next/navigation';
 
@@ -17,7 +17,10 @@ interface StudentInfo {
   class: string;
 }
 
-export default function ExamPage({ params }: { params: { id: string } }) {
+export default function ExamPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  
   const [loading, setLoading] = useState(true);
   const [quiz, setQuiz] = useState<any>(null);
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
@@ -32,7 +35,7 @@ export default function ExamPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
-        const res = await fetch(`/api/quizzes/${params.id}`);
+        const res = await fetch(`/api/quizzes/${id}`);
         if (res.ok) {
           const data = await res.json();
           setQuiz(data.quiz);
@@ -48,7 +51,7 @@ export default function ExamPage({ params }: { params: { id: string } }) {
       }
     };
     fetchQuiz();
-  }, [params.id, router]);
+  }, [id, router]);
 
   // 2. Timer Logic
   useEffect(() => {
@@ -73,7 +76,7 @@ export default function ExamPage({ params }: { params: { id: string } }) {
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`/api/quizzes/${params.id}`, {
+      const res = await fetch(`/api/quizzes/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
