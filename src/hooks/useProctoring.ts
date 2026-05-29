@@ -1,42 +1,54 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
-interface ProctoringConfig {
-  onViolation: (action: string, details?: string) => void;
-  enabled: boolean;
-}
+export const useProctoring = (enabled: boolean) => {
+  const [violations, setViolations] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(true);
+  const violationRef = useRef<string[]>([]);
 
-export const useProctoring = ({ onViolation, enabled }: ProctoringConfig) => {
+  const addViolation = useCallback((msg: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const fullMsg = `[${timestamp}] ${msg}`;
+    violationRef.current = [...violationRef.current, fullMsg];
+    setViolations(violationRef.current);
+  }, []);
+
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden) {
-      onViolation('TAB_SWITCH', 'Student left the examination tab');
+      addViolation('Rời khỏi tab bài thi');
     }
-  }, [onViolation]);
+  }, [addViolation]);
 
   const handleBlur = useCallback(() => {
-    onViolation('WINDOW_BLUR', 'Examination window lost focus');
-  }, [onViolation]);
+    addViolation('Mất tiêu điểm (Chuyển cửa sổ)');
+  }, [addViolation]);
 
   const handleFullscreenChange = useCallback(() => {
-    if (!document.fullscreenElement) {
-      onViolation('FULLSCREEN_EXIT', 'Student exited fullscreen mode');
+    const isFull = !!document.fullscreenElement;
+    setIsFullscreen(isFull);
+    if (!isFull) {
+      addViolation('Thoát chế độ toàn màn hình');
     }
-  }, [onViolation]);
+  }, [addViolation]);
 
   const preventDefault = useCallback((e: Event) => {
     e.preventDefault();
-    onViolation('RESTRICTED_ACTION', `Attempted prohibited action: ${e.type}`);
-  }, [onViolation]);
+    addViolation(`Hành động bị chặn: ${e.type}`);
+  }, [addViolation]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      violationRef.current = [];
+      setViolations([]);
+      return;
+    }
 
-    // Visibility & Blur
+    // Initial check
+    setIsFullscreen(!!document.fullscreenElement);
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
-
-    // Fullscreen
     document.addEventListener('fullscreenchange', handleFullscreenChange);
 
     // Restrictions
@@ -62,9 +74,13 @@ export const useProctoring = ({ onViolation, enabled }: ProctoringConfig) => {
         await document.documentElement.requestFullscreen();
       }
     } catch (err) {
-      console.error('Error attempting to enable full-screen mode:', err);
+      console.error('Error enabling fullscreen:', err);
     }
   };
 
-  return { enterFullscreen };
+  return { 
+    violations, 
+    isFullscreen, 
+    enterFullscreen 
+  };
 };
