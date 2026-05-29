@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 import { NotificationProvider } from "@/context/NotificationContext";
+import { GuardProvider } from "@/context/GuardProvider";
 
 export const metadata: Metadata = {
   title: "QuestGuard - Advanced Proctoring System",
@@ -27,9 +28,11 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
-        <NotificationProvider>
-          {children}
-        </NotificationProvider>
+        <GuardProvider>
+          <NotificationProvider>
+            {children}
+          </NotificationProvider>
+        </GuardProvider>
       </body>
     </html>
   );
