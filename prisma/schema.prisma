@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  password  String
+  role      Role     @default(STUDENT)
+  quizzes   Quiz[]   @relation("LecturerQuizzes")
+  attempts  Submission[]
+  logs      AuditLog[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  STUDENT
+  LECTURER
+}
+
+model Quiz {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  duration    Int          // Duration in minutes
+  startTime   DateTime?
+  endTime     DateTime?
+  lecturerId  String
+  lecturer    User         @relation("LecturerQuizzes", fields: [lecturerId], references: [id])
+  questions   Question[]
+  submissions Submission[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Question {
+  id          String   @id @default(cuid())
+  text        String
+  type        String   // "MULTIPLE_CHOICE" or "ESSAY"
+  points      Int      @default(1)
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  options     Option[]
+  answers     Answer[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  text       String
+  isCorrect  Boolean  @default(false)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id])
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id])
+  answers   Answer[]
+  score     Float?
+  startTime DateTime @default(now())
+  endTime   DateTime?
+  logs      AuditLog[]
+  status    String   @default("IN_PROGRESS") // "IN_PROGRESS", "SUBMITTED", "GRADED"
+}
+
+model Answer {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  questionId   String
+  question     Question   @relation(fields: [questionId], references: [id])
+  content      String     // Selected option ID or essay text
+  createdAt    DateTime   @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      User     @relation(fields: [studentId], references: [id])
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  action       String   // e.g., "TAB_SWITCH", "FULLSCREEN_EXIT", "COPY_PASTE"
+  details      String?
+  timestamp    DateTime @default(now())
+}
