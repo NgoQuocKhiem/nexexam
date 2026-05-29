@@ -103,8 +103,33 @@ export default function ExamPage({ params }: { params: Promise<{ id: string }> }
   };
 
   const handleSubmit = async () => {
-    alert('Bài thi đã được nộp thành công!');
-    router.push('/dashboard/student');
+    if (!studentInfo || !quiz) return;
+    
+    try {
+      const res = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quizId: id,
+          studentInfo: {
+            name: studentInfo.name,
+            mssv: studentInfo.mssv,
+            class: studentInfo.class,
+          },
+          answers,
+          violations,
+        }),
+      });
+
+      if (res.ok) {
+        alert('Chúc mừng! Bài thi của bạn đã được nộp thành công.');
+        router.push('/');
+      } else {
+        alert('Lỗi nộp bài. Vui lòng thử lại hoặc báo cho Giảng viên.');
+      }
+    } catch (error) {
+      alert('Lỗi kết nối máy chủ');
+    }
   };
 
   if (loading) return <div className="loading-state">Đang tải bài thi...</div>;

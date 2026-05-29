@@ -18,22 +18,41 @@ export default function LecturerQuizzes() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchQuizzes = async () => {
-      try {
-        const res = await fetch('/api/quizzes');
-        if (res.ok) {
-          const data = await res.json();
-          setQuizzes(data.quizzes || []);
-        }
-      } catch (error) {
-        console.error('Fetch quizzes error:', error);
-      } finally {
-        setLoading(false);
+  const fetchQuizzes = async () => {
+    try {
+      const res = await fetch('/api/quizzes');
+      if (res.ok) {
+        const data = await res.json();
+        setQuizzes(data.quizzes || []);
       }
-    };
+    } catch (error) {
+      console.error('Fetch quizzes error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchQuizzes();
   }, []);
+
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa bài thi "${title}"? Thao tác này sẽ xóa toàn bộ câu hỏi và kết quả thi của sinh viên.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/quizzes/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert('Xóa bài thi thành công');
+        fetchQuizzes();
+      } else {
+        alert('Lỗi khi xóa bài thi');
+      }
+    } catch (error) {
+      alert('Lỗi kết nối');
+    }
+  };
 
   return (
     <div className="quizzes-container animate-fade-in">
@@ -56,24 +75,39 @@ export default function LecturerQuizzes() {
         </div>
       ) : (
         <div className="quizzes-grid">
-          {quizzes.map((quiz) => (
-            <div key={quiz.id} className="quiz-card glass-card">
-              <div className="status-badge active">Đang mở</div>
-              <h3>{quiz.title}</h3>
-              <div className="quiz-meta">
-                <p>📅 {new Date(quiz.createdAt).toLocaleDateString()}</p>
-                <p>👥 {quiz._count.submissions} lượt nộp bài</p>
+          {quizzes.map((quiz) => {
+            const examUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/exam/${quiz.id}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(examUrl)}`;
+
+            return (
+              <div key={quiz.id} className="quiz-card glass-card">
+                <div className="card-top flex-between">
+                  <div className="status-badge active">Đang mở</div>
+                  <button className="delete-btn" title="Xóa bài thi" onClick={() => handleDelete(quiz.id, quiz.title)}>🗑️</button>
+                </div>
+                
+                <div className="quiz-main-content">
+                  <div className="quiz-info">
+                    <h3>{quiz.title}</h3>
+                    <div className="quiz-meta">
+                      <p>📅 {new Date(quiz.createdAt).toLocaleDateString()}</p>
+                      <p>👥 {quiz._count.submissions} lượt nộp bài</p>
+                    </div>
+                  </div>
+                  
+                  <div className="qr-container">
+                    <img src={qrUrl} alt="QR Code" className="qr-img" />
+                    <p className="qr-label">Quét để thi</p>
+                  </div>
+                </div>
+
+                <div className="card-actions">
+                  <Link href={`/dashboard/lecturer/results?quizId=${quiz.id}`} className="btn btn-secondary btn-sm text-center">Xem Kết Quả</Link>
+                  <Link href={`/dashboard/lecturer/monitoring?quizId=${quiz.id}`} className="btn btn-primary btn-sm text-center">Giám Sát (Live)</Link>
+                </div>
               </div>
-              <div className="card-actions">
-                <Link href={`/dashboard/lecturer/monitoring?quizId=${quiz.id}`} className="btn btn-primary btn-sm">Giám sát</Link>
-                <button className="btn btn-secondary btn-sm" onClick={() => {
-                  const url = `${window.location.origin}/exam/${quiz.id}`;
-                  navigator.clipboard.writeText(url);
-                  alert('Đã copy link bài thi: ' + url);
-                }}>Copy Link</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -87,22 +121,24 @@ export default function LecturerQuizzes() {
 
         .quizzes-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
           gap: 2rem;
         }
 
         .quiz-card {
-          padding: 2rem;
-          position: relative;
+          padding: 1.5rem;
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 1.5rem;
+          transition: transform 0.2s;
         }
+        .quiz-card:hover { transform: translateY(-4px); }
+
+        .card-top { align-items: center; }
+        .delete-btn { background: none; border: none; font-size: 1.25rem; cursor: pointer; opacity: 0.5; transition: 0.2s; }
+        .delete-btn:hover { opacity: 1; transform: scale(1.1); }
 
         .status-badge {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
           font-size: 0.7rem;
           padding: 0.25rem 0.5rem;
           border-radius: 4px;
@@ -111,16 +147,24 @@ export default function LecturerQuizzes() {
         }
         .status-badge.active { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
 
-        h3 { font-size: 1.25rem; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .quiz-main-content { display: flex; gap: 1.5rem; justify-content: space-between; align-items: center; }
+        .quiz-info { flex: 1; }
+
+        h3 { font-size: 1.35rem; margin-bottom: 0.75rem; color: var(--primary); }
         .quiz-meta { color: var(--text-muted); font-size: 0.9rem; }
-        .quiz-meta p { margin-bottom: 0.5rem; }
+        .quiz-meta p { margin-bottom: 0.4rem; }
         
+        .qr-container { text-align: center; background: white; padding: 0.5rem; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .qr-img { width: 100px; height: 100px; display: block; }
+        .qr-label { font-size: 0.65rem; color: #333; margin-top: 0.25rem; font-weight: 700; }
+
         .card-actions {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 1rem;
-          margin-top: 1rem;
+          margin-top: auto;
         }
+        .text-center { text-align: center; }
       `}</style>
     </div>
   );
