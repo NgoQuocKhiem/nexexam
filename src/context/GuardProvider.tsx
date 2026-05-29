@@ -59,6 +59,11 @@ export const GuardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Block Keyboard Shortcuts globally
   useEffect(() => {
+      const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      recordViolation('RIGHT_CLICK_MENU');
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // F12
       if (e.key === 'F12') {
@@ -80,10 +85,33 @@ export const GuardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         e.preventDefault();
         recordViolation('SAVE_PAGE');
       }
+      // Ctrl+P (Print)
+      if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        recordViolation('PRINT_PAGE');
+      }
     };
 
+    // Advanced DevTools detection (debugger loop)
+    // This makes using DevTools nearly impossible as it pauses execution
+    const devToolsTrap = setInterval(() => {
+      const startTime = performance.now();
+      debugger;
+      const endTime = performance.now();
+      if (endTime - startTime > 100) {
+        // If debugger paused the execution, it means DevTools is likely open
+        recordViolation('DEVTOOLS_DETECTED_DEBUGGER');
+      }
+    }, 2000);
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenu);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      clearInterval(devToolsTrap);
+    };
   }, [recordViolation]);
 
   return (
