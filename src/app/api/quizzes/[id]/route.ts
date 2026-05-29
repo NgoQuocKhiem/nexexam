@@ -28,9 +28,6 @@ export async function GET(
             },
           },
         },
-        enableAlarm: true,
-        alarmDuration: true,
-        reminderText: true,
       },
     });
 
