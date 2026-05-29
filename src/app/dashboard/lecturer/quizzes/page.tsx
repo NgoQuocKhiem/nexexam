@@ -54,6 +54,23 @@ export default function LecturerQuizzes() {
     }
   };
 
+  const downloadQR = async (url: string, title: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `QR_${title.replace(/\s+/g, '_')}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      window.open(url, '_blank');
+    }
+  };
+
   return (
     <div className="quizzes-container animate-fade-in">
       <header className="page-header flex-between">
@@ -77,7 +94,7 @@ export default function LecturerQuizzes() {
         <div className="quizzes-grid">
           {quizzes.map((quiz) => {
             const examUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/exam/${quiz.id}`;
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(examUrl)}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(examUrl)}`;
 
             return (
               <div key={quiz.id} className="quiz-card glass-card">
@@ -93,9 +110,16 @@ export default function LecturerQuizzes() {
                       <p>📅 {new Date(quiz.createdAt).toLocaleDateString()}</p>
                       <p>👥 {quiz._count.submissions} lượt nộp bài</p>
                     </div>
+                    <div className="share-actions">
+                      <button className="share-link-btn" onClick={() => {
+                        navigator.clipboard.writeText(examUrl);
+                        alert('Đã copy link bài thi!');
+                      }}>🔗 Copy Link</button>
+                      <button className="share-qr-btn" onClick={() => downloadQR(qrUrl, quiz.title)}>💾 Tải mã QR</button>
+                    </div>
                   </div>
                   
-                  <div className="qr-container">
+                  <div className="qr-preview">
                     <img src={qrUrl} alt="QR Code" className="qr-img" />
                     <p className="qr-label">Quét để thi</p>
                   </div>
@@ -121,7 +145,7 @@ export default function LecturerQuizzes() {
 
         .quizzes-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
           gap: 2rem;
         }
 
@@ -130,9 +154,7 @@ export default function LecturerQuizzes() {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
-          transition: transform 0.2s;
         }
-        .quiz-card:hover { transform: translateY(-4px); }
 
         .card-top { align-items: center; }
         .delete-btn { background: none; border: none; font-size: 1.25rem; cursor: pointer; opacity: 0.5; transition: 0.2s; }
@@ -147,24 +169,37 @@ export default function LecturerQuizzes() {
         }
         .status-badge.active { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
 
-        .quiz-main-content { display: flex; gap: 1.5rem; justify-content: space-between; align-items: center; }
+        .quiz-main-content { display: flex; gap: 2rem; justify-content: space-between; align-items: center; }
         .quiz-info { flex: 1; }
 
-        h3 { font-size: 1.35rem; margin-bottom: 0.75rem; color: var(--primary); }
-        .quiz-meta { color: var(--text-muted); font-size: 0.9rem; }
-        .quiz-meta p { margin-bottom: 0.4rem; }
+        h3 { font-size: 1.5rem; margin-bottom: 0.75rem; color: var(--primary); }
+        .quiz-meta { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+        .quiz-meta p { margin-bottom: 0.5rem; }
+
+        .share-actions { display: flex; gap: 1rem; }
+        .share-link-btn, .share-qr-btn { 
+          background: rgba(255, 255, 255, 0.05); 
+          border: 1px solid var(--border); 
+          padding: 0.5rem 0.75rem; 
+          border-radius: 6px; 
+          font-size: 0.8rem; 
+          color: var(--text); 
+          cursor: pointer;
+          transition: 0.2s;
+        }
+        .share-link-btn:hover, .share-qr-btn:hover { background: var(--surface); border-color: var(--primary); }
         
-        .qr-container { text-align: center; background: white; padding: 0.5rem; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-        .qr-img { width: 100px; height: 100px; display: block; }
-        .qr-label { font-size: 0.65rem; color: #333; margin-top: 0.25rem; font-weight: 700; }
+        .qr-preview { text-align: center; background: white; padding: 0.75rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+        .qr-img { width: 120px; height: 120px; display: block; border-radius: 4px; }
+        .qr-label { font-size: 0.7rem; color: #333; margin-top: 0.5rem; font-weight: 800; text-transform: uppercase; }
 
         .card-actions {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 1rem;
+          gap: 1.5rem;
           margin-top: auto;
         }
-        .text-center { text-align: center; }
+        .text-center { text-align: center; line-height: 2.2; }
       `}</style>
     </div>
   );

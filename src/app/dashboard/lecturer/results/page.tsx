@@ -45,7 +45,7 @@ function ResultsContent() {
       {loading ? (
         <div className="loading-state">Đang tải kết quả...</div>
       ) : submissions.length === 0 ? (
-        <div className="empty-state glass-card">Chu chưa có sinh viên nào nộp bài.</div>
+        <div className="empty-state glass-card">Chưa có sinh viên nào nộp bài.</div>
       ) : (
         <div className="table-container glass-card">
           <table className="results-table">
@@ -53,6 +53,8 @@ function ResultsContent() {
               <tr>
                 <th>Sinh viên</th>
                 <th>MSSV / Lớp</th>
+                <th>Điểm số</th>
+                <th>Số câu đúng</th>
                 <th>Thời gian nộp</th>
                 <th>Vi phạm</th>
                 <th>Thao tác</th>
@@ -67,6 +69,14 @@ function ResultsContent() {
                   <td>
                     <div className="student-meta">{sub.student.email.split('@')[0]}</div>
                   </td>
+                  <td className="score-cell">
+                    <span className={`score-badge ${sub.score >= 5 ? 'pass' : 'fail'}`}>
+                      {sub.score?.toFixed(1) || '0.0'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="correct-tag">{sub.correctCount} / {sub.totalQuestions}</span>
+                  </td>
                   <td>{new Date(sub.endTime).toLocaleString()}</td>
                   <td>
                     <span className={`violation-count ${sub.logs.length > 0 ? 'warning' : 'safe'}`}>
@@ -74,7 +84,7 @@ function ResultsContent() {
                     </span>
                   </td>
                   <td>
-                    <button className="btn btn-secondary btn-sm" onClick={() => alert('Chức năng xem chi tiết bài làm đang được phát triển.')}>Chi tiết</button>
+                    <Link href={`/dashboard/lecturer/results/${sub.id}`} className="btn btn-secondary btn-sm">Xem chi tiết</Link>
                   </td>
                 </tr>
               ))}
@@ -99,6 +109,12 @@ function ResultsContent() {
         
         .student-name { font-weight: 700; color: var(--text); }
         .student-meta { font-size: 0.85rem; color: var(--text-muted); }
+
+        .score-badge { padding: 0.4rem 0.8rem; border-radius: 8px; font-weight: 800; font-family: monospace; font-size: 1.1rem; }
+        .score-badge.pass { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+        .score-badge.fail { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+        .correct-tag { font-weight: 600; color: var(--text-muted); }
 
         .violation-count { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; }
         .violation-count.safe { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
