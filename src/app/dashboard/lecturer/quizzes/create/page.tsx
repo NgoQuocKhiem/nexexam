@@ -14,6 +14,7 @@ export default function CreateQuizPage() {
   const [duration, setDuration] = useState(60);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [importText, setImportText] = useState('');
+  const [whitelistText, setWhitelistText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -85,10 +86,19 @@ export default function CreateQuizPage() {
 
     setLoading(true);
     try {
+      // Parse whitelist
+      const whitelist = whitelistText
+        .split('\n')
+        .filter((l) => l.trim().includes('|'))
+        .map((line) => {
+          const parts = line.split('|').map((p) => p.trim());
+          return { name: parts[0], mssv: parts[1], class: parts[2] };
+        });
+
       const res = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, duration, questions }),
+        body: JSON.stringify({ title, description, duration, questions, whitelist }),
       });
 
       if (!res.ok) {
@@ -143,6 +153,18 @@ export default function CreateQuizPage() {
                 required 
               />
             </div>
+          </section>
+
+          <section className="glass-card settings-section">
+            <h3>Danh sách Sinh viên (Whitelist)</h3>
+            <p className="help-text">Nhập danh sách những sinh viên được phép dự thi.</p>
+            <textarea 
+              className="whitelist-textarea"
+              value={whitelistText}
+              onChange={(e) => setWhitelistText(e.target.value)}
+              placeholder="Họ tên | MSSV | Lớp (Ví dụ: Nguyễn Văn A | 200123 | IT-01)"
+            />
+            <p className="q-number">Định dạng: Họ tên | MSSV | Lớp</p>
           </section>
 
           <section className="glass-card questions-section">

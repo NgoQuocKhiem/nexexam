@@ -5,9 +5,9 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
 
-export async function POST(req: Request) {
+// GET: Fetch all quizzes for the current lecturer
+export async function GET() {
   try {
-    // 1. Get user from token
     const cookieStore = await cookies();
     const token = cookieStore.get('token')?.value;
 
@@ -18,14 +18,42 @@ export async function POST(req: Request) {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     const lecturerId = decoded.userId;
 
-    // 2. Parse request body
-    const { title, description, duration, questions } = await req.json();
+    const quizzes = await prisma.quiz.findMany({
+      where: { lecturerId },
+      include: {
+        _count: {
+          select: { submissions: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return NextResponse.json({ quizzes });
+  } catch (error) {
+    console.error('Fetch quizzes error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// POST: Create a new quiz with questions and whitelist
+export async function POST(req: Request) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('token')?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const lecturerId = decoded.userId;
+
+    const { title, description, duration, questions, whitelist } = await req.json();
 
     if (!title || !questions || questions.length === 0) {
       return NextResponse.json({ error: 'Title and at least one question are required' }, { status: 400 });
     }
 
-    // 3. Create Quiz and Questions in a transaction
     const quiz = await prisma.$transaction(async (tx) => {
       const newQuiz = await tx.quiz.create({
         data: {
@@ -46,13 +74,13 @@ export async function POST(req: Request) {
               },
             })),
           },
-        },
-        include: {
-          questions: {
-            include: {
-              options: true,
-            },
-          },
+          allowedStudents: whitelist ? {
+            create: whitelist.map((s: any) => ({
+              name: s.name,
+              mssv: s.mssv,
+              class: s.class,
+            })),
+          } : undefined,
         },
       });
       return newQuiz;
